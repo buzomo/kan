@@ -1,0 +1,538 @@
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>環</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>🥏</text></svg>">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .smart-mode-cursor {
+            caret-color: rgb(172, 46, 197);
+        }
+        .plain-text-mode-cursor {
+            caret-color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <input type="text" class="search-box" id="search-box" placeholder="タイトルを検索...">
+            <ul class="page-list" id="page-list"></ul>
+        </div>
+        <div class="content">
+            <textarea id="content-area"></textarea>
+            <div id="preview-area"></div>
+            <div class="button-group">
+                <button id="delete-page" data-tooltip="ページ削除">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+                <button id="random-page" data-tooltip="ランダムページ">
+                    <i class="fas fa-random"></i>
+                </button>
+                <button id="upload-button" data-tooltip="アップロード">
+                    <i class="fas fa-upload"></i>
+                </button>
+                <button id="search-yahoo" data-tooltip="Yahooリアルタイム検索">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button id="search-google" data-tooltip="Googleお任せ検索">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        <div class="backlinks">
+            <h2>バックリンク</h2>
+            <input type="text" class="search-box" id="backlinks-search-box" placeholder="バックリンクを検索...">
+            <ul class="page-list" id="backlinks-list"></ul>
+            <h2 style="margin-top: 40px;">リンク</h2>
+            <input type="text" class="search-box" id="links-search-box" placeholder="リンクを検索...">
+            <ul class="page-list" id="links-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const store = {
+            pages: {},
+            save() {
+                localStorage.setItem('wikiPages', JSON.stringify(this.pages));
+            },
+            async load() {
+                const response = await fetch('contents.json');
+                const data = await response.json();
+                this.pages = JSON.parse(localStorage.getItem('wikiPages')) || data;
+            }
+        };
+
+        const contentArea = document.getElementById('content-area');
+        const previewArea = document.getElementById('preview-area');
+        let currentPage = '';
+        let isSmartMode = true;
+
+        // マークダウンの設定
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
+        // プレビューの更新
+        function updatePreview() {
+            let content = contentArea.value;
+            const titleLine = `# ${currentPage}\n`;
+            if (!content.startsWith(titleLine)) {
+                content = titleLine + content.split('\n').slice(1).join('\n');
+                contentArea.value = content;
+            }
+            store.pages[currentPage] = content;
+            store.save();
+            renderPreview();
+            updatePageList();
+            updateBacklinks(); // バックリンクの更新を追加
+        }
+
+        // プレビューの表示
+        function renderPreview() {
+            const content = store.pages[currentPage];
+            if (!content) return;
+
+            let html = marked.parse(content);
+            // WikiLinks [text] を <a> タグに変換
+            html = html.replace(/\[([^\]]+)\]/g, (match, p1) => {
+                return `<a href="#" onclick="showContent('${p1}');return false;">${p1}</a>`;
+            });
+            previewArea.innerHTML = html;
+        }
+
+        // 画像の存在をチェックする関数
+        function checkImage(url, callback) {
+            const img = new Image();
+            img.onload = () => callback(true);
+            img.onerror = () => callback(false);
+            img.src = url;
+        }
+
+        // ページリストの更新
+        function updatePageList(searchTerm = '') {
+            const pageList = document.getElementById('page-list');
+            pageList.innerHTML = '';
+
+            Object.entries(store.pages).forEach(([title, content]) => {
+                const firstLine = content.split('\n')[0].replace(/^#\s*/, '');
+                if (!firstLine.toLowerCase().includes(searchTerm.toLowerCase())) return;
+
+                const li = document.createElement('li');
+                li.onclick = () => showContent(title);
+                if (title === currentPage) li.classList.add('active');
+
+                const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+                if (imgMatch) {
+                    // 画像がある場合
+                    checkImage(imgMatch[1], (exists) => {
+                        if (exists) {
+                            li.innerHTML = `
+                                <div class="title">${title}</div>
+                                <img class="thumbnail" src="${imgMatch[1]}" alt="${title}">
+                            `;
+                        } else {
+                            const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                            li.innerHTML = `
+                                <div class="title">${title}</div>
+                                <div class="preview">${preview}</div>
+                            `;
+                        }
+                        pageList.appendChild(li);
+                    });
+                } else {
+                    // 画像がない場合
+                    const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                    li.innerHTML = `
+                        <div class="title">${title}</div>
+                        <div class="preview">${preview}</div>
+                    `;
+                    pageList.appendChild(li);
+                }
+            });
+        }
+
+        // バックリンクとリンク先の更新
+        function updateBacklinks() {
+            const backlinkslist = document.getElementById('backlinks-list');
+            const linkslist = document.getElementById('links-list');
+            const backlinksSearchBox = document.getElementById('backlinks-search-box');
+            const linksSearchBox = document.getElementById('links-search-box');
+            backlinkslist.innerHTML = '';
+            linkslist.innerHTML = '';
+
+            let backlinksCount = 0;
+            let linksCount = 0;
+
+            Object.entries(store.pages).forEach(([title, content]) => {
+                if (title === currentPage) return;
+
+                const hasBacklink = content.includes(`[${currentPage}]`);
+                const hasLink = store.pages[currentPage].includes(`[${title}]`);
+
+                if (hasBacklink) {
+                    backlinksCount++;
+                    const li = document.createElement('li');
+                    li.onclick = () => showContent(title);
+
+                    const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+                    if (imgMatch) {
+                        checkImage(imgMatch[1], (exists) => {
+                            if (exists) {
+                                li.innerHTML = `
+                                    <div class="title">${title}</div>
+                                    <img class="thumbnail" src="${imgMatch[1]}" alt="${title}">
+                                `;
+                            } else {
+                                const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                                li.innerHTML = `
+                                    <div class="title">${title}</div>
+                                    <div class="preview">${preview}</div>
+                                `;
+                            }
+                            backlinkslist.appendChild(li);
+                        });
+                    } else {
+                        const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                        li.innerHTML = `
+                            <div class="title">${title}</div>
+                            <div class="preview">${preview}</div>
+                        `;
+                        backlinkslist.appendChild(li);
+                    }
+                }
+
+                if (hasLink) {
+                    linksCount++;
+                    const li = document.createElement('li');
+                    li.onclick = () => showContent(title);
+
+                    const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+                    if (imgMatch) {
+                        checkImage(imgMatch[1], (exists) => {
+                            if (exists) {
+                                li.innerHTML = `
+                                    <div class="title">${title}</div>
+                                    <img class="thumbnail" src="${imgMatch[1]}" alt="${title}">
+                                `;
+                            } else {
+                                const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                                li.innerHTML = `
+                                    <div class="title">${title}</div>
+                                    <div class="preview">${preview}</div>
+                                `;
+                            }
+                            linkslist.appendChild(li);
+                        });
+                    } else {
+                        const preview = content.split('\n').slice(1).join(' ').substring(0, 100).replace(/<\/?[^>]+(>|$)/g, "");
+                        li.innerHTML = `
+                            <div class="title">${title}</div>
+                            <div class="preview">${preview}</div>
+                        `;
+                        linkslist.appendChild(li);
+                    }
+                }
+            });
+
+            // ページが存在しないリンクも表示
+            const links = store.pages[currentPage].match(/\[([^\]]+)\]/g) || [];
+            links.forEach(link => {
+                const title = link.replace(/[\[\]]/g, '');
+                if (!store.pages[title]) {
+                    const li = document.createElement('li');
+                    li.onclick = () => showContent(title);
+                    li.innerHTML = `
+                        <div class="title">${title}</div>
+                        <div class="preview">新しいページを作成</div>
+                    `;
+                    linkslist.appendChild(li);
+                }
+            });
+
+            backlinksSearchBox.disabled = backlinksCount === 0;
+            linksSearchBox.disabled = linksCount === 0 && links.length === 0;
+        }
+
+        // バックリンクとリンクのフィルター
+        document.getElementById('backlinks-search-box').addEventListener('input', (e) => {
+            filterList('backlinks-list', e.target.value);
+        });
+
+        document.getElementById('links-search-box').addEventListener('input', (e) => {
+            filterList('links-list', e.target.value);
+        });
+
+        function filterList(listId, searchTerm) {
+            const list = document.getElementById(listId);
+            const items = list.getElementsByTagName('li');
+            for (let i = 0; i < items.length; i++) {
+                const title = items[i].getElementsByClassName('title')[0].innerText;
+                if (title.toLowerCase().includes(searchTerm.toLowerCase())) {
+                    items[i].style.display = '';
+                } else {
+                    items[i].style.display = 'none';
+                }
+            }
+        }
+
+        // URLパラメーターを取得する関数
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        // ページタイトルとURLパラメーターを更新
+        function updateUrlAndTitle(title) {
+            document.title = title + ' - 環';
+            const newUrl = `${window.location.origin}${window.location.pathname}?page=${encodeURIComponent(title)}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+        }
+
+        // コンテンツの表示
+        function showContent(title) {
+            currentPage = title;
+            if (!store.pages[title]) {
+                store.pages[title] = `# ${title}\n`;
+                store.save();
+            }
+            contentArea.value = store.pages[title];
+            renderPreview();
+            updatePageList();
+            updateBacklinks();
+            updateUrlAndTitle(title);
+        }
+
+        // タイトルのみが表示されている状態で2行目に"- "を追記し、カーソルをその末尾に移動
+        function addBulletPoint() {
+            const lines = contentArea.value.split('\n');
+            if (lines.length === 1 && lines[0].startsWith('# ')) {
+                contentArea.value += '\n- ';
+                contentArea.setSelectionRange(contentArea.value.length, contentArea.value.length);
+            } else if (lines.length === 2 && lines[0].startsWith('# ') && lines[1] === '') {
+                contentArea.value += '- ';
+                contentArea.setSelectionRange(contentArea.value.length, contentArea.value.length);
+            }
+        }
+
+        // 「気が利くモード」と「プレーンテキストモード」の切り替え
+        function toggleMode() {
+            isSmartMode = !isSmartMode;
+            if (isSmartMode) {
+                contentArea.classList.add('smart-mode-cursor');
+                contentArea.classList.remove('plain-text-mode-cursor');
+            } else {
+                contentArea.classList.add('plain-text-mode-cursor');
+                contentArea.classList.remove('smart-mode-cursor');
+            }
+        }
+
+        // Altキーでモードをトグル
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && !contentArea.matches(':focus')) {
+                toggleMode();
+            }
+        });
+
+        // Ctrl+Kで検索バーにフォーカス
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('search-box').focus();
+            }
+        });
+
+        // 初期モード設定
+        if (isSmartMode) {
+            contentArea.classList.add('smart-mode-cursor');
+        } else {
+            contentArea.classList.add('plain-text-mode-cursor');
+        }
+
+        // 「気が利くモード」の動作
+        function smartModeHandler(e) {
+            if (e.key === 'Enter') {
+                const cursorPosition = contentArea.selectionStart;
+                const textBeforeCursor = contentArea.value.substring(0, cursorPosition);
+                const textAfterCursor = contentArea.value.substring(cursorPosition);
+                const currentLine = textBeforeCursor.split('\n').pop();
+
+                if (currentLine.startsWith('# ')) {
+                    e.preventDefault();
+                    contentArea.value = textBeforeCursor + '\n- ' + textAfterCursor;
+                    contentArea.setSelectionRange(cursorPosition + 3, cursorPosition + 3);
+                } else if (currentLine.startsWith('- ') && currentLine !== '- ') {
+                    e.preventDefault();
+                    contentArea.value = textBeforeCursor + '\n- ' + textAfterCursor;
+                    contentArea.setSelectionRange(cursorPosition + 3, cursorPosition + 3);
+                } else if (currentLine === '- ') {
+                    e.preventDefault();
+                    contentArea.value = textBeforeCursor + '\n\n# ' + textAfterCursor;
+                    contentArea.setSelectionRange(cursorPosition + 4, cursorPosition + 4);
+                }
+            }
+        }
+
+        // イベントリスナーの設定
+        contentArea.addEventListener('input', () => {
+            updatePreview();
+            updateBacklinks(); // バックリンクの更新を追加
+        });
+        contentArea.addEventListener('focus', () => {
+            contentArea.style.display = 'block';
+            previewArea.style.display = 'none';
+            contentArea.classList.add('edit-mode');
+            addBulletPoint();
+        });
+        contentArea.addEventListener('blur', () => {
+            contentArea.style.display = 'none';
+            previewArea.style.display = 'block';
+            contentArea.classList.remove('edit-mode');
+        });
+
+        // プレビューエリアをクリックすると編集モードに切り替え
+        previewArea.addEventListener('click', () => {
+            contentArea.style.display = 'block';
+            previewArea.style.display = 'none';
+            contentArea.classList.add('edit-mode');
+            contentArea.focus();
+        });
+
+        // 編集エリアの外にマウスカーソルが移動した場合に閲覧モードに戻す
+        document.addEventListener('mousemove', (e) => {
+            if (!contentArea.contains(e.target) && !previewArea.contains(e.target)) {
+                contentArea.style.display = 'none';
+                previewArea.style.display = 'block';
+                contentArea.classList.remove('edit-mode');
+            }
+        });
+
+        contentArea.addEventListener('keydown', (e) => {
+            if (isSmartMode) {
+                smartModeHandler(e);
+            }
+        });
+
+        document.getElementById('search-box').addEventListener('input', (e) => {
+            updatePageList(e.target.value);
+        });
+
+        // クリップボードにコピー
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Copied to clipboard');
+                showCopySign();
+            });
+        }
+
+        // データの変更を監視
+        let timeout;
+        contentArea.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                copyToClipboard(JSON.stringify(store.pages));
+            }, 2000);
+        });
+
+        // ページ削除
+        document.getElementById('delete-page').addEventListener('click', () => {
+            if (currentPage && store.pages[currentPage]) {
+                const deletedPage = store.pages[currentPage];
+                delete store.pages[currentPage];
+                store.save();
+                showToast('ページが削除されました', () => {
+                    store.pages[currentPage] = deletedPage;
+                    store.save();
+                    showContent(currentPage);
+                });
+                showContent('Home');
+            }
+        });
+
+        // ランダムページ表示
+        document.getElementById('random-page').addEventListener('click', () => {
+            const keys = Object.keys(store.pages);
+            if (keys.length > 1) {
+                let randomPage;
+                do {
+                    randomPage = keys[Math.floor(Math.random() * keys.length)];
+                } while (randomPage === currentPage);
+                showContent(randomPage);
+            } else if (keys.length === 1) {
+                showContent(keys[0]);
+            }
+        });
+
+        // アップロードボタン
+        document.getElementById('upload-button').addEventListener('click', () => {
+            window.open('https://time.is', '_blank', 'width=500,height=500,toolbar=no,scrollbars=no');
+        });
+
+        // トースト表示
+        function showToast(message, undoCallback) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `${message} <button id="undo-button">取り消し</button>`;
+            document.body.appendChild(toast);
+
+            document.getElementById('undo-button').addEventListener('click', () => {
+                undoCallback();
+                document.body.removeChild(toast);
+            });
+
+            setTimeout(() => {
+                if (document.body.contains(toast)) {
+                    document.body.removeChild(toast);
+                }
+            }, 10000);
+        }
+
+        // クリップボードにコピーしたときのサイン表示
+        function showCopySign() {
+            const sign = document.createElement('div');
+            sign.className = 'copy-sign';
+            sign.innerText = 'Copied!';
+            document.body.appendChild(sign);
+
+            setTimeout(() => {
+                document.body.removeChild(sign);
+            }, 2000);
+        }
+
+        // 検索結果がヒットしなかった場合の新規ページ作成
+        document.getElementById('search-box').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const searchTerm = e.target.value;
+                if (!Object.keys(store.pages).some(title => title.toLowerCase().includes(searchTerm.toLowerCase()))) {
+                    store.pages[searchTerm] = `# ${searchTerm}\n`;
+                    store.save();
+                    showContent(searchTerm);
+                    contentArea.focus();
+                }
+            }
+        });
+
+        // ページタイトルでWeb検索するボタンのイベントリスナー
+        document.getElementById('search-yahoo').addEventListener('click', () => {
+            const url = `https://search.yahoo.co.jp/realtime/search?p=${encodeURIComponent(currentPage)}`;
+            window.open(url, '_blank');
+        });
+
+        document.getElementById('search-google').addEventListener('click', () => {
+            const url = `https://www.google.com/search?btnI=I&q=${encodeURIComponent(currentPage)}`;
+            window.open(url, '_blank');
+        });
+
+        // 初期表示
+        store.load().then(() => {
+            const initialPage = getUrlParameter('page') || 'Home';
+            showContent(initialPage);
+        });
+    </script>
+</body>
+</html>
