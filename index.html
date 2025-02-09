@@ -80,12 +80,20 @@
         // プレビューの更新
         function updatePreview() {
             let content = contentArea.value;
-            const titleLine = `# ${currentPage}\n`;
-            if (!content.startsWith(titleLine)) {
-                content = titleLine + content.split('\n').slice(1).join('\n');
-                contentArea.value = content;
+            const lines = content.split('\n');
+            const titleLine = lines[0];
+            const newTitle = titleLine.replace(/^#\s*/, '');
+
+            if (newTitle !== currentPage) {
+                const oldContent = store.pages[currentPage];
+                delete store.pages[currentPage];
+                currentPage = newTitle;
+                store.pages[currentPage] = oldContent.replace(/^#\s*[^\n]*/, titleLine);
+                updateUrlAndTitle(currentPage);
+            } else {
+                store.pages[currentPage] = content;
             }
-            store.pages[currentPage] = content;
+
             store.save();
             renderPreview();
             updatePageList();
@@ -666,19 +674,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+    // ステータス表示関数
+    function updateIndicator(text) {
+        const indicator = document.querySelector('.auto-save-indicator');
+        if (indicator) {
+            indicator.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
+        }
+    }
 
         // ページ削除
-        document.getElementById('delete-page').addEventListener('click', () => {
+        document.getElementById('delete-page').addEventListener('click', async () => {
             if (currentPage && store.pages[currentPage]) {
                 const deletedPage = store.pages[currentPage];
                 delete store.pages[currentPage];
                 store.save();
-                showToast('ページが削除されました', () => {
+                updateIndicator('ページを削除中...'); // ステータス表示を追加
+                showToast('ページが削除されました', async () => {
                     store.pages[currentPage] = deletedPage;
                     store.save();
                     showContent(currentPage);
+                    await GitHubSync.autoSave(store.pages); // 自動保存を追加
+                    updateIndicator(`最終保存: ${new Date().toLocaleTimeString()}`); // ステータス更新を追加
                 });
                 showContent('Home');
+                await GitHubSync.autoSave(store.pages); // 自動保存を追加
+                updateIndicator(`最終保存: ${new Date().toLocaleTimeString()}`); // ステータス更新を追加
             }
         });
 
@@ -717,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (document.body.contains(toast)) {
                     document.body.removeChild(toast);
                 }
-            }, 10000);
+            }, 2000);
         }
 
         // クリップボードにコピーしたときのサイン表示
