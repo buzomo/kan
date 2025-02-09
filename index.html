@@ -126,7 +126,9 @@
             const pageList = document.getElementById('page-list');
             pageList.innerHTML = '';
 
-            Object.entries(store.pages).forEach(([title, content]) => {
+            const entries = Object.entries(store.pages).reverse(); // 逆順に変更
+
+            entries.forEach(([title, content]) => {
                 const firstLine = content.split('\n')[0].replace(/^#\s*/, '');
                 if (!firstLine.toLowerCase().includes(searchTerm.toLowerCase())) return;
 

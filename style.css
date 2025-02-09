@@ -43,6 +43,12 @@ body {
 
 .page-list {
   list-style: none;
+  overflow-y: scroll;
+  scrollbar-width: none; /* Firefox */
+}
+
+.page-list::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .page-list li {
@@ -84,7 +90,7 @@ body {
 
 #content-area {
   width: 100%;
-  min-height: 500px;
+  height: calc(100vh - 40px); /* 画面いっぱいの高さに設定 */
   padding: 10px;
   font-family: inherit;
   border: 1px solid #f48fb1; /* パステルピンク */
@@ -270,4 +276,10 @@ h2 {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   font-size: 14px;
+}
+
+a {
+  color: #00ff00; /* 蛍光グリーン */
+  font-weight: bold;
+  text-decoration: none;
 }
