@@ -31,9 +31,7 @@
                 <button id="random-page" data-tooltip="ランダムページ">
                     <i class="fas fa-random"></i>
                 </button>
-                <button id="upload-button" data-tooltip="アップロード">
-                    <i class="fas fa-upload"></i>
-                </button>
+                <!-- アップロードボタンを廃止 -->
                 <button id="search-yahoo" data-tooltip="Yahooリアルタイム検索">
                     <i class="fas fa-search"></i>
                 </button>
@@ -70,6 +68,9 @@
         const previewArea = document.getElementById('preview-area');
         let currentPage = '';
         let isSmartMode = true;
+        let previousPage = '';
+        let lastPreviewedPage = '';
+        let previewTimeoutId = null;
 
         // マークダウンの設定
         marked.setOptions({
@@ -108,7 +109,7 @@
             let html = marked.parse(content);
             // WikiLinks [text] を <a> タグに変換
             html = html.replace(/\[([^\]]+)\]/g, (match, p1) => {
-                return `<a href="#" onclick="showContent('${p1}');return false;">${p1}</a>`;
+                return `<a href="#" onclick="showContent('${p1}', false);return false;">${p1}</a>`;
             });
             previewArea.innerHTML = html;
         }
@@ -133,6 +134,7 @@
                 if (!firstLine.toLowerCase().includes(searchTerm.toLowerCase())) return;
 
                 const li = document.createElement('li');
+                li.onmouseover = () => debouncePreviewContent(title);
                 li.onclick = () => showContent(title);
                 if (title === currentPage) li.classList.add('active');
 
@@ -164,6 +166,12 @@
                     pageList.appendChild(li);
                 }
             });
+
+            pageList.onmouseleave = () => {
+                if (lastPreviewedPage) {
+                    showContent(lastPreviewedPage, false);
+                }
+            };
         }
 
         // バックリンクとリンク先の更新
@@ -306,7 +314,10 @@
         }
 
         // コンテンツの表示
-        function showContent(title) {
+        function showContent(title, updateHistory = true) {
+            if (updateHistory) {
+                previousPage = currentPage;
+            }
             currentPage = title;
             if (!store.pages[title]) {
                 store.pages[title] = `# ${title}\n`;
@@ -317,6 +328,22 @@
             updatePageList();
             updateBacklinks();
             updateUrlAndTitle(title);
+        }
+
+        // プレビューの表示
+        function previewContent(title) {
+            lastPreviewedPage = title;
+            currentPage = title;
+            renderPreview();
+            updateBacklinks();
+        }
+
+        // デバウンスされたプレビューの表示
+        function debouncePreviewContent(title) {
+            clearTimeout(previewTimeoutId);
+            previewTimeoutId = setTimeout(() => {
+                previewContent(title);
+            }, 10);
         }
 
         // タイトルのみが表示されている状態で2行目に"- "を追記し、カーソルをその末尾に移動
@@ -354,6 +381,13 @@
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'k') {
                 e.preventDefault();
+                document.getElementById('search-box').focus();
+            }
+        });
+
+        // 閲覧モードでの入力時に検索バーにフォーカス
+        document.addEventListener('keydown', (e) => {
+            if (!contentArea.matches(':focus') && !e.ctrlKey && !e.altKey && !e.metaKey) {
                 document.getElementById('search-box').focus();
             }
         });
@@ -546,12 +580,8 @@ const AutoSaveManager = (() => {
     let isSaving = false;
     const debounceTime = 2000;
 
-    const indicator = document.createElement('div');
-    indicator.className = 'auto-save-indicator';
-    document.body.appendChild(indicator);
-
     function updateIndicator(text) {
-        indicator.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
+        // インジケーターの更新を廃止
     }
 
     async function handleInput() {
@@ -632,19 +662,6 @@ style.textContent = `
         transform: translateY(20px);
     }
 
-    .auto-save-indicator {
-        position: fixed;
-        bottom: 10px;
-        left: 10px;
-        font-size: 0.8em;
-        color: #666;
-        background: rgba(255,255,255,0.9);
-        padding: 5px 10px;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        z-index: 1000;
-    }
-
     .toast-icon {
         width: 20px;
         height: 20px;
@@ -658,11 +675,6 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', () => {
     AutoSaveManager.init();
     
-    // アップロードボタン（手動保存用）
-    document.getElementById('upload-button').addEventListener('click', () => {
-        document.getElementById('content-area').dispatchEvent(new Event('input'));
-    });
-
     // gh_tokenの先頭5文字をトースト表示
     const ghToken = getLocalStorageToken('gh_token');
     if (ghToken) {
@@ -675,14 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showContent(initialPage);
     });
 });
-
-    // ステータス表示関数
-    function updateIndicator(text) {
-        const indicator = document.querySelector('.auto-save-indicator');
-        if (indicator) {
-            indicator.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
-        }
-    }
 
         // ページ削除
         document.getElementById('delete-page').addEventListener('click', async () => {
@@ -718,11 +722,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // アップロードボタン
-        document.getElementById('upload-button').addEventListener('click', () => {
-            window.open('https://time.is', '_blank', 'width=500,height=500,toolbar=no,scrollbars=no');
-        });
-
         // トースト表示
         function showToast(message, undoCallback) {
             const toast = document.createElement('div');
@@ -751,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setTimeout(() => {
                 document.body.removeChild(sign);
-            }, 2000);
+            }, 1000);
         }
 
         // 検索結果がヒットしなかった場合の新規ページ作成
@@ -782,6 +781,12 @@ document.addEventListener('DOMContentLoaded', () => {
         store.load().then(() => {
             const initialPage = getUrlParameter('page') || 'Home';
             showContent(initialPage);
+        });
+
+        // ブラウザのヒストリーバック・進むに対応
+        window.addEventListener('popstate', (event) => {
+            const page = getUrlParameter('page') || 'Home';
+            showContent(page, false);
         });
     </script>
 </body>
