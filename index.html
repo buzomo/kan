@@ -57,7 +57,7 @@
                 // localStorageへの保存を廃止
             },
             async load() {
-                const response = await fetch('contents.json');
+                const response = await fetch('https://github.com/buzomo/kan/blob/main/contents.json');
                 const data = await response.json();
                 this.pages = data;
             }
