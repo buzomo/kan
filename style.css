@@ -26,7 +26,7 @@ body {
 
 .content {
   width: 50%;
-  padding: 20px;
+  padding: 40px;
   height: 100vh;
   overflow-y: auto;
   background: #f3e5f5; /* パステルパープル */
@@ -112,6 +112,14 @@ body {
 #preview-area {
   padding: 10px;
   height: 100%;
+  padding-bottom: 50px; /* 余裕を持たせるためのパディングを追加 */
+  position: relative; /* 相対位置を設定 */
+}
+
+#preview-area::after {
+  content: "";
+  display: block;
+  height: 50px; /* 余裕を持たせるためのダミー要素 */
 }
 
 #preview-area img {
@@ -232,7 +240,6 @@ body {
 #preview-area h6 {
   margin-top: 1.5em; /* 行間を広げる */
   margin-bottom: 1em; /* 行間を広げる */
-  line-height: 2em; /* 行間を広げる */
   font-weight: bold;
   letter-spacing: 2px;
 }
