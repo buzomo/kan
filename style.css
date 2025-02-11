@@ -193,9 +193,9 @@ body {
   right: 20px;
   padding: 15px 25px;
   border-radius: 8px;
-  color: white;
+  color: white !important;
   font-family: sans-serif;
-  transition: opacity 0.3s;
+  background: #333; /* 背景色をグレーに変更 */
 }
 
 .toast-success {
@@ -294,7 +294,6 @@ a {
 ::-webkit-scrollbar {
   display: none;
 }
-
 @media (max-width: 900px) {
   .container {
     flex-direction: column;
@@ -308,11 +307,10 @@ a {
     height: 3%;
     background: rgba(248, 187, 208, 0.9); /* 半透明の背景 */
     z-index: 1000;
-
   }
 
   .sidebar:focus-within {
-    height:70%;
+    height: 70%;
   }
 
   .sidebar .search-box {
