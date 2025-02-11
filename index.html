@@ -57,7 +57,7 @@
                 // localStorageへの保存を廃止
             },
             async load() {
-                const response = await fetch('https://raw.githubusercontent.com/buzomo/kan/refs/heads/main/contents.json');
+                const response = await fetch('https://raw.githubusercontent.com/buzomo/kan-pub-data/refs/heads/main/contents.json');
                 const data = await response.json();
                 this.pages = data;
             }
@@ -515,7 +515,7 @@ const GitHubSync = (() => {
     async function getFileSHA() {
         try {
             const response = await fetch(
-                'https://api.github.com/repos/buzomo/kan/contents/contents.json',
+                'https://api.github.com/repos/buzomo/kan-pub-data/contents/contents.json',
                 {
                     headers: {
                         'Authorization': `token ${getLocalStorageToken('gh_token')}`,
@@ -540,7 +540,7 @@ const GitHubSync = (() => {
         try {
             const sha = await getFileSHA();
             const response = await fetch(
-                'https://api.github.com/repos/buzomo/kan/contents/contents.json',
+                'https://api.github.com/repos/buzomo/kan-pub-data/contents/contents.json',
                 {
                     method: 'PUT',
                     headers: {
