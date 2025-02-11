@@ -185,6 +185,8 @@
 
             let backlinksCount = 0;
             let linksCount = 0;
+            const seenLinks = new Set();
+            const seenBacklinks = new Set();
 
             Object.entries(store.pages).forEach(([title, content]) => {
                 if (title === currentPage) return;
@@ -192,7 +194,8 @@
                 const hasBacklink = content.includes(`[${currentPage}]`);
                 const hasLink = store.pages[currentPage].includes(`[${title}]`);
 
-                if (hasBacklink) {
+                if (hasBacklink && !seenBacklinks.has(title)) {
+                    seenBacklinks.add(title);
                     backlinksCount++;
                     const li = document.createElement('li');
                     li.onclick = () => showContent(title);
@@ -224,7 +227,8 @@
                     }
                 }
 
-                if (hasLink) {
+                if (hasLink && !seenLinks.has(title)) {
+                    seenLinks.add(title);
                     linksCount++;
                     const li = document.createElement('li');
                     li.onclick = () => showContent(title);
@@ -261,7 +265,8 @@
             const links = store.pages[currentPage].match(/\[([^\]]+)\]/g) || [];
             links.forEach(link => {
                 const title = link.replace(/[\[\]]/g, '');
-                if (!store.pages[title]) {
+                if (!store.pages[title] && !/\[.*?\]\(.*?\)/.test(link) && !seenLinks.has(title)) { // URL記法 "[]()" であれば無視
+                    seenLinks.add(title);
                     const li = document.createElement('li');
                     li.onclick = () => showContent(title);
                     li.innerHTML = `
@@ -474,6 +479,21 @@
                 showCopySign();
             });
         }
+// タイトルしか存在しないエントリを一掃する関数
+function cleanUpEmptyEntries() {
+    const flag =false
+    Object.entries(store.pages).forEach(([title, content]) => {
+        const lines = content.split('\n');
+        if (lines.length === 2 && lines[0].startsWith('# ')) {
+            delete store.pages[title];
+            flag=true
+        }
+    });
+    store.save();
+    if (flag){
+    GitHubSync.autoSave(store.pages)}
+}
+
 // Cookie操作ユーティリティをLocalStorage操作ユーティリティに変更
 function getLocalStorageToken(name) {
     return localStorage.getItem(name);
@@ -529,7 +549,7 @@ const GitHubSync = (() => {
                     },
                     body: JSON.stringify({
                         message: `Auto-save ${new Date().toISOString()}`,
-                        content: base64EncodeUnicode(JSON.stringify(content)), // 修正箇所
+                        content: base64EncodeUnicode(JSON.stringify(content, null, 2)), // 修正箇所
                         sha: sha
                     }),
                     signal: controller.signal
@@ -683,6 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初期表示
     store.load().then(() => {
+        cleanUpEmptyEntries(); // タイトルしか存在しないエントリを一掃
         const initialPage = getUrlParameter('page') || 'Home';
         showContent(initialPage);
     });
