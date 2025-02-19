@@ -482,18 +482,19 @@
             });
         }
 // タイトルしか存在しないエントリを一掃する関数
-function cleanUpEmptyEntries() {
-    const flag =false
-    Object.entries(store.pages).forEach(([title, content]) => {
-        const lines = content.split('\n');
-        if (lines.length === 2 && lines[0].startsWith('# ')) {
-            delete store.pages[title];
-            flag=true
-        }
-    });
-    store.save();
-    if (flag){
-    GitHubSync.autoSave(store.pages)}
+        function cleanUpEmptyEntries() {
+            let flag = false; // 修正: const から let に変更
+            Object.entries(store.pages).forEach(([title, content]) => {
+                const lines = content.split('\n');
+                if (lines.length === 2 && lines[0].startsWith('# ')) {
+                    delete store.pages[title];
+                    flag = true; // 修正: const から let に変更
+                }
+            });
+            store.save();
+            if (flag) {
+                GitHubSync.autoSave(store.pages);
+            HubSync.autoSave(store.pages)}
 }
 
 // Cookie操作ユーティリティをLocalStorage操作ユーティリティに変更
