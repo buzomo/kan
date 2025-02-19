@@ -669,7 +669,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初期表示
     store.load().then(() => {
-        cleanUpEmptyEntries(); // タイトルしか存在しないエントリを一掃
         const initialPage = getUrlParameter('page') || 'Home';
         showContent(initialPage);
     });
